@@ -39,11 +39,6 @@
 #include <string>
 #include <vector>
 
-// Custom constants used by both node_constants.cc and node_zlib.cc
-#define Z_MIN_WINDOWBITS 8
-#define Z_MAX_WINDOWBITS 15
-#define Z_DEFAULT_WINDOWBITS 15
-
 struct sockaddr;
 
 namespace node {
@@ -200,6 +195,12 @@ v8::MaybeLocal<v8::Value> InternalMakeCallback(
     v8::Local<v8::Value> argv[],
     async_context asyncContext);
 
+v8::MaybeLocal<v8::Value> MakeSyncCallback(v8::Isolate* isolate,
+                                           v8::Local<v8::Object> recv,
+                                           v8::Local<v8::Function> callback,
+                                           int argc,
+                                           v8::Local<v8::Value> argv[]);
+
 class InternalCallbackScope {
  public:
   enum Flags {
@@ -310,7 +311,20 @@ struct InitializationResult {
   std::vector<std::string> exec_args;
   bool early_return = false;
 };
+
+enum InitializationSettingsFlags : uint64_t {
+  kDefaultInitialization = 1 << 0,
+  kInitializeV8 = 1 << 1,
+  kRunPlatformInit = 1 << 2,
+  kInitOpenSSL = 1 << 3
+};
+
+// TODO(codebytere): eventually document and expose to embedders.
 InitializationResult InitializeOncePerProcess(int argc, char** argv);
+InitializationResult InitializeOncePerProcess(
+  int argc,
+  char** argv,
+  InitializationSettingsFlags flags);
 void TearDownOncePerProcess();
 void SetIsolateErrorHandlers(v8::Isolate* isolate, const IsolateSettings& s);
 void SetIsolateMiscHandlers(v8::Isolate* isolate, const IsolateSettings& s);

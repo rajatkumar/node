@@ -13,7 +13,6 @@
 #include "test/unittests/compiler/node-test-utils.h"
 
 using ::testing::_;
-using v8::internal::compiler::Node;
 
 namespace c = v8::internal::compiler;
 
@@ -23,8 +22,9 @@ namespace internal {
 CodeStubAssemblerTestState::CodeStubAssemblerTestState(
     CodeStubAssemblerTest* test)
     : compiler::CodeAssemblerState(
-          test->isolate(), test->zone(), VoidDescriptor{}, CodeKind::STUB,
-          "test", PoisoningMitigationLevel::kPoisonCriticalOnly) {}
+          test->isolate(), test->zone(), VoidDescriptor{},
+          CodeKind::FOR_TESTING, "test",
+          PoisoningMitigationLevel::kPoisonCriticalOnly) {}
 
 TARGET_TEST_F(CodeStubAssemblerTest, SmiTag) {
   CodeStubAssemblerTestState state(this);

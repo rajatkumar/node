@@ -1,107 +1,145 @@
 const path = require('path')
 const util = require('util')
-const log = require('npmlog')
 const npa = require('npm-package-arg')
 const libaccess = require('libnpmaccess')
 const npmFetch = require('npm-registry-fetch')
 const libunpub = require('libnpmpublish').unpublish
 const readJson = util.promisify(require('read-package-json'))
 
-const npm = require('./npm.js')
-const usageUtil = require('./utils/usage.js')
-const output = require('./utils/output.js')
 const otplease = require('./utils/otplease.js')
-const whoami = util.promisify(require('./whoami.js'))
+const getIdentity = require('./utils/get-identity.js')
 
-const usage = usageUtil('unpublish', 'npm unpublish [<@scope>/]<pkg>[@<version>]')
-
-const cmd = (args, cb) => unpublish(args).then(() => cb()).catch(cb)
-
-const completion = (args, cb) => completionFn(args)
-  .then((res) => cb(null, res))
-  .catch(cb)
-
-const completionFn = async (args) => {
-  const { partialWord, conf } = args
-
-  if (conf.argv.remain.length >= 3)
-    return
-
-  const username = await whoami([], true)
-  if (!username)
-    return []
-  const opts = npm.flatOptions
-
-  const access = await libaccess.lsPackages(username, opts)
-  // do a bit of filtering at this point, so that we don't need
-  // to fetch versions for more than one thing, but also don't
-  // accidentally a whole project
-  let pkgs = Object.keys(access)
-  if (!partialWord || !pkgs.length)
-    return pkgs
-
-  const pp = npa(partialWord).name
-  pkgs = pkgs.filter(p => !p.indexOf(pp))
-  if (pkgs.length > 1)
-    return pkgs
-
-  const json = await npmFetch.json(npa(pkgs[0]).escapedName, opts)
-  const versions = Object.keys(json.versions)
-  if (!versions.length)
-    return pkgs
-  else
-    return versions.map(v => `${pkgs[0]}@${v}`)
-}
-
-async function unpublish (args) {
-  if (args.length > 1)
-    throw usage
-
-  const spec = args.length && npa(args[0])
-  const opts = npm.flatOptions
-  const { force, silent, loglevel } = opts
-  let ret
-
-  log.silly('unpublish', 'args[0]', args[0])
-  log.silly('unpublish', 'spec', spec)
-
-  if (!spec.rawSpec && !force) {
-    throw (
-      'Refusing to delete entire project.\n' +
-      'Run with --force to do this.\n' +
-      usage
-    )
+const BaseCommand = require('./base-command.js')
+class Unpublish extends BaseCommand {
+  static get description () {
+    return 'Remove a package from the registry'
   }
 
-  if (!spec || path.resolve(spec.name) === npm.localPrefix) {
-    // if there's a package.json in the current folder, then
-    // read the package name and version out of that.
-    const pkgJson = path.join(npm.localPrefix, 'package.json')
-    const manifest = await readJson(pkgJson)
+  /* istanbul ignore next - see test/lib/load-all-commands.js */
+  static get name () {
+    return 'unpublish'
+  }
 
-    log.verbose('unpublish', manifest)
+  /* istanbul ignore next - see test/lib/load-all-commands.js */
+  static get params () {
+    return ['dry-run', 'force', 'workspace', 'workspaces']
+  }
 
-    const { name, version, publishConfig } = manifest
-    const pkgJsonSpec = npa.resolve(name, version)
+  /* istanbul ignore next - see test/lib/load-all-commands.js */
+  static get usage () {
+    return ['[<@scope>/]<pkg>[@<version>]']
+  }
 
-    try {
-      ret = await otplease(opts, opts => libunpub(pkgJsonSpec, { ...opts, publishConfig }))
-    } catch (err) {
-      if (err && err.code !== 'ENOENT' && err.code !== 'ENOTDIR')
-        throw err
-      else
-        throw `Usage: ${usage}`
+  async completion (args) {
+    const { partialWord, conf } = args
+
+    if (conf.argv.remain.length >= 3)
+      return []
+
+    const opts = this.npm.flatOptions
+    const username = await getIdentity(this.npm, { ...opts }).catch(() => null)
+    if (!username)
+      return []
+
+    const access = await libaccess.lsPackages(username, opts)
+    // do a bit of filtering at this point, so that we don't need
+    // to fetch versions for more than one thing, but also don't
+    // accidentally unpublish a whole project
+    let pkgs = Object.keys(access || {})
+    if (!partialWord || !pkgs.length)
+      return pkgs
+
+    const pp = npa(partialWord).name
+    pkgs = pkgs.filter(p => !p.indexOf(pp))
+    if (pkgs.length > 1)
+      return pkgs
+
+    const json = await npmFetch.json(npa(pkgs[0]).escapedName, opts)
+    const versions = Object.keys(json.versions)
+    if (!versions.length)
+      return pkgs
+    else
+      return versions.map(v => `${pkgs[0]}@${v}`)
+  }
+
+  exec (args, cb) {
+    this.unpublish(args).then(() => cb()).catch(cb)
+  }
+
+  execWorkspaces (args, filters, cb) {
+    this.unpublishWorkspaces(args, filters).then(() => cb()).catch(cb)
+  }
+
+  async unpublish (args) {
+    if (args.length > 1)
+      throw this.usageError()
+
+    const spec = args.length && npa(args[0])
+    const force = this.npm.config.get('force')
+    const loglevel = this.npm.config.get('loglevel')
+    const silent = loglevel === 'silent'
+    const dryRun = this.npm.config.get('dry-run')
+    let pkgName
+    let pkgVersion
+
+    this.npm.log.silly('unpublish', 'args[0]', args[0])
+    this.npm.log.silly('unpublish', 'spec', spec)
+
+    if ((!spec || !spec.rawSpec) && !force) {
+      throw this.usageError(
+        'Refusing to delete entire project.\n' +
+        'Run with --force to do this.'
+      )
     }
-  } else
-    ret = await otplease(opts, opts => libunpub(spec, opts))
 
-  if (!silent && loglevel !== 'silent') {
-    output(`- ${spec.name}${
-      spec.type === 'version' ? `@${spec.rawSpec}` : ''
-    }`)
+    const opts = this.npm.flatOptions
+    if (!spec || path.resolve(spec.name) === this.npm.localPrefix) {
+      // if there's a package.json in the current folder, then
+      // read the package name and version out of that.
+      const pkgJson = path.join(this.npm.localPrefix, 'package.json')
+      let manifest
+      try {
+        manifest = await readJson(pkgJson)
+      } catch (err) {
+        if (err && err.code !== 'ENOENT' && err.code !== 'ENOTDIR')
+          throw err
+        else
+          throw this.usageError()
+      }
+
+      this.npm.log.verbose('unpublish', manifest)
+
+      const { name, version, publishConfig } = manifest
+      const pkgJsonSpec = npa.resolve(name, version)
+      const optsWithPub = { ...opts, publishConfig }
+      if (!dryRun)
+        await otplease(opts, opts => libunpub(pkgJsonSpec, optsWithPub))
+      pkgName = name
+      pkgVersion = version ? `@${version}` : ''
+    } else {
+      if (!dryRun)
+        await otplease(opts, opts => libunpub(spec, opts))
+      pkgName = spec.name
+      pkgVersion = spec.type === 'version' ? `@${spec.rawSpec}` : ''
+    }
+
+    if (!silent)
+      this.npm.output(`- ${pkgName}${pkgVersion}`)
   }
 
-  return ret
-}
+  async unpublishWorkspaces (args, filters) {
+    await this.setWorkspaces(filters)
 
-module.exports = Object.assign(cmd, { completion, usage })
+    const force = this.npm.config.get('force')
+    if (!force) {
+      throw this.usageError(
+        'Refusing to delete entire project(s).\n' +
+        'Run with --force to do this.'
+      )
+    }
+
+    for (const name of this.workspaceNames)
+      await this.unpublish([name])
+  }
+}
+module.exports = Unpublish

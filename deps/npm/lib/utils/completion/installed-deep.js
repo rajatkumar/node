@@ -1,10 +1,7 @@
-'use strict'
-
 const { resolve } = require('path')
 const Arborist = require('@npmcli/arborist')
-const npm = require('../../npm.js')
 
-const readNames = async () => {
+const installedDeep = async (npm) => {
   const {
     depth,
     global,
@@ -13,12 +10,13 @@ const readNames = async () => {
 
   const getValues = (tree) =>
     [...tree.inventory.values()]
+      .filter(i => i.location !== '' && !i.isRoot)
       .map(i => {
         return i
       })
       .filter(i => (i.depth - 1) <= depth)
       .sort((a, b) => a.depth - b.depth)
-      .sort((a, b) => a.depth === b.depth ? a.name.localeCompare(b.name) : 0)
+      .sort((a, b) => a.depth === b.depth ? a.name.localeCompare(b.name, 'en') : 0)
 
   const res = new Set()
   const gArb = new Arborist({ global: true, path: resolve(npm.globalDir, '..') })
@@ -35,10 +33,6 @@ const readNames = async () => {
   }
 
   return [...res]
-}
-
-function installedDeep (opts, cb) {
-  return readNames().then(res => cb(null, res)).catch(cb)
 }
 
 module.exports = installedDeep

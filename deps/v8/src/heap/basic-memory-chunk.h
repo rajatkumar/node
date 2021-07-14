@@ -203,7 +203,18 @@ class BasicMemoryChunk {
   static const Flags kSkipEvacuationSlotsRecordingMask =
       kEvacuationCandidateMask | kIsInYoungGenerationMask;
 
-  bool InReadOnlySpace() const { return IsFlagSet(READ_ONLY_HEAP); }
+ private:
+  bool InReadOnlySpaceRaw() const { return IsFlagSet(READ_ONLY_HEAP); }
+
+ public:
+  bool InReadOnlySpace() const {
+#ifdef THREAD_SANITIZER
+    // This is needed because TSAN does not process the memory fence
+    // emitted after page initialization.
+    SynchronizedHeapLoad();
+#endif
+    return IsFlagSet(READ_ONLY_HEAP);
+  }
 
   bool NeverEvacuate() { return IsFlagSet(NEVER_EVACUATE); }
 
@@ -283,13 +294,11 @@ class BasicMemoryChunk {
 
   // Only works if the pointer is in the first kPageSize of the MemoryChunk.
   static BasicMemoryChunk* FromAddress(Address a) {
-    DCHECK(!V8_ENABLE_THIRD_PARTY_HEAP_BOOL);
     return reinterpret_cast<BasicMemoryChunk*>(BaseAddress(a));
   }
 
   // Only works if the object is in the first kPageSize of the MemoryChunk.
   static BasicMemoryChunk* FromHeapObject(HeapObject o) {
-    DCHECK(!V8_ENABLE_THIRD_PARTY_HEAP_BOOL);
     return reinterpret_cast<BasicMemoryChunk*>(BaseAddress(o.ptr()));
   }
 
@@ -337,7 +346,7 @@ class BasicMemoryChunk {
   // Perform a dummy acquire load to tell TSAN that there is no data race in
   // mark-bit initialization. See MemoryChunk::Initialize for the corresponding
   // release store.
-  void SynchronizedHeapLoad();
+  void SynchronizedHeapLoad() const;
 #endif
 
  protected:

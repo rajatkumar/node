@@ -10,6 +10,7 @@ on:
   push:
     branches:
       - master
+      - main
     paths-ignore:
       - 'doc/**'
       - 'deps/**'
@@ -22,6 +23,7 @@ env:
 
 jobs:
   coverage-linux:
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2

@@ -6,7 +6,7 @@
 #include "node_errors.h"
 #include "node_external_reference.h"
 #include "node_internals.h"
-#include "node_process.h"
+#include "node_process-inl.h"
 #include "util-inl.h"
 #include "uv.h"
 #include "v8-fast-api-calls.h"
@@ -34,12 +34,17 @@ typedef int mode_t;
 
 namespace node {
 
+using v8::ApiObject;
 using v8::Array;
 using v8::ArrayBuffer;
 using v8::BackingStore;
+using v8::CFunction;
+using v8::ConstructorBehavior;
 using v8::Context;
 using v8::Float64Array;
 using v8::FunctionCallbackInfo;
+using v8::FunctionTemplate;
+using v8::Global;
 using v8::HeapStatistics;
 using v8::Integer;
 using v8::Isolate;
@@ -47,6 +52,9 @@ using v8::Local;
 using v8::NewStringType;
 using v8::Number;
 using v8::Object;
+using v8::ObjectTemplate;
+using v8::SideEffectType;
+using v8::Signature;
 using v8::String;
 using v8::Uint32;
 using v8::Value;
@@ -164,13 +172,19 @@ static void Kill(const FunctionCallbackInfo<Value>& args) {
   args.GetReturnValue().Set(err);
 }
 
-static void MemoryUsage(const FunctionCallbackInfo<Value>& args) {
+static void Rss(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
 
   size_t rss;
   int err = uv_resident_set_memory(&rss);
   if (err)
     return env->ThrowUVException(err, "uv_resident_set_memory");
+
+  args.GetReturnValue().Set(static_cast<double>(rss));
+}
+
+static void MemoryUsage(const FunctionCallbackInfo<Value>& args) {
+  Environment* env = Environment::GetCurrent(args);
 
   Isolate* isolate = env->isolate();
   // V8 memory usage
@@ -184,12 +198,19 @@ static void MemoryUsage(const FunctionCallbackInfo<Value>& args) {
   Local<ArrayBuffer> ab = get_fields_array_buffer(args, 0, 5);
   double* fields = static_cast<double*>(ab->GetBackingStore()->Data());
 
-  fields[0] = rss;
-  fields[1] = v8_heap_stats.total_heap_size();
-  fields[2] = v8_heap_stats.used_heap_size();
-  fields[3] = v8_heap_stats.external_memory();
-  fields[4] = array_buffer_allocator == nullptr ?
-      0 : array_buffer_allocator->total_mem_usage();
+  size_t rss;
+  int err = uv_resident_set_memory(&rss);
+  if (err)
+    return env->ThrowUVException(err, "uv_resident_set_memory");
+
+  fields[0] = static_cast<double>(rss);
+  fields[1] = static_cast<double>(v8_heap_stats.total_heap_size());
+  fields[2] = static_cast<double>(v8_heap_stats.used_heap_size());
+  fields[3] = static_cast<double>(v8_heap_stats.external_memory());
+  fields[4] =
+      array_buffer_allocator == nullptr
+          ? 0
+          : static_cast<double>(array_buffer_allocator->total_mem_usage());
 }
 
 void RawDebug(const FunctionCallbackInfo<Value>& args) {
@@ -272,20 +293,20 @@ static void ResourceUsage(const FunctionCallbackInfo<Value>& args) {
 
   fields[0] = MICROS_PER_SEC * rusage.ru_utime.tv_sec + rusage.ru_utime.tv_usec;
   fields[1] = MICROS_PER_SEC * rusage.ru_stime.tv_sec + rusage.ru_stime.tv_usec;
-  fields[2] = rusage.ru_maxrss;
-  fields[3] = rusage.ru_ixrss;
-  fields[4] = rusage.ru_idrss;
-  fields[5] = rusage.ru_isrss;
-  fields[6] = rusage.ru_minflt;
-  fields[7] = rusage.ru_majflt;
-  fields[8] = rusage.ru_nswap;
-  fields[9] = rusage.ru_inblock;
-  fields[10] = rusage.ru_oublock;
-  fields[11] = rusage.ru_msgsnd;
-  fields[12] = rusage.ru_msgrcv;
-  fields[13] = rusage.ru_nsignals;
-  fields[14] = rusage.ru_nvcsw;
-  fields[15] = rusage.ru_nivcsw;
+  fields[2] = static_cast<double>(rusage.ru_maxrss);
+  fields[3] = static_cast<double>(rusage.ru_ixrss);
+  fields[4] = static_cast<double>(rusage.ru_idrss);
+  fields[5] = static_cast<double>(rusage.ru_isrss);
+  fields[6] = static_cast<double>(rusage.ru_minflt);
+  fields[7] = static_cast<double>(rusage.ru_majflt);
+  fields[8] = static_cast<double>(rusage.ru_nswap);
+  fields[9] = static_cast<double>(rusage.ru_inblock);
+  fields[10] = static_cast<double>(rusage.ru_oublock);
+  fields[11] = static_cast<double>(rusage.ru_msgsnd);
+  fields[12] = static_cast<double>(rusage.ru_msgrcv);
+  fields[13] = static_cast<double>(rusage.ru_nsignals);
+  fields[14] = static_cast<double>(rusage.ru_nvcsw);
+  fields[15] = static_cast<double>(rusage.ru_nivcsw);
 }
 
 #ifdef __POSIX__
@@ -336,7 +357,7 @@ static void DebugProcess(const FunctionCallbackInfo<Value>& args) {
   });
 
   CHECK(args[0]->IsNumber());
-  pid = args[0].As<Integer>()->Value();
+  pid = static_cast<DWORD>(args[0].As<Integer>()->Value());
 
   process =
       OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION |
@@ -406,22 +427,21 @@ static void ReallyExit(const FunctionCallbackInfo<Value>& args) {
 class FastHrtime : public BaseObject {
  public:
   static Local<Object> New(Environment* env) {
-    Local<v8::FunctionTemplate> ctor =
-        v8::FunctionTemplate::New(env->isolate());
+    Local<FunctionTemplate> ctor = FunctionTemplate::New(env->isolate());
     ctor->Inherit(BaseObject::GetConstructorTemplate(env));
-    Local<v8::ObjectTemplate> otmpl = ctor->InstanceTemplate();
+    Local<ObjectTemplate> otmpl = ctor->InstanceTemplate();
     otmpl->SetInternalFieldCount(FastHrtime::kInternalFieldCount);
 
     auto create_func = [env](auto fast_func, auto slow_func) {
-      auto cfunc = v8::CFunction::Make(fast_func);
-      return v8::FunctionTemplate::New(env->isolate(),
-                                       slow_func,
-                                       Local<Value>(),
-                                       Local<v8::Signature>(),
-                                       0,
-                                       v8::ConstructorBehavior::kThrow,
-                                       v8::SideEffectType::kHasNoSideEffect,
-                                       &cfunc);
+      auto cfunc = CFunction::Make(fast_func);
+      return FunctionTemplate::New(env->isolate(),
+                                   slow_func,
+                                   Local<Value>(),
+                                   Local<Signature>(),
+                                   0,
+                                   ConstructorBehavior::kThrow,
+                                   SideEffectType::kHasNoSideEffect,
+                                   &cfunc);
     };
 
     otmpl->Set(FIXED_ONE_BYTE_STRING(env->isolate(), "hrtime"),
@@ -458,8 +478,8 @@ class FastHrtime : public BaseObject {
   SET_MEMORY_INFO_NAME(FastHrtime)
   SET_SELF_SIZE(FastHrtime)
 
-  static FastHrtime* FromV8ApiObject(v8::ApiObject api_object) {
-    v8::Object* v8_object = reinterpret_cast<v8::Object*>(&api_object);
+  static FastHrtime* FromV8ApiObject(ApiObject api_object) {
+    Object* v8_object = reinterpret_cast<Object*>(&api_object);
     return static_cast<FastHrtime*>(
         v8_object->GetAlignedPointerFromInternalField(BaseObject::kSlot));
   }
@@ -481,7 +501,7 @@ class FastHrtime : public BaseObject {
     fields[2] = t % NANOS_PER_SEC;
   }
 
-  static void FastNumber(v8::ApiObject receiver) {
+  static void FastNumber(ApiObject receiver) {
     NumberImpl(FromV8ApiObject(receiver));
   }
 
@@ -495,7 +515,7 @@ class FastHrtime : public BaseObject {
     fields[0] = t;
   }
 
-  static void FastBigInt(v8::ApiObject receiver) {
+  static void FastBigInt(ApiObject receiver) {
     BigIntImpl(FromV8ApiObject(receiver));
   }
 
@@ -503,7 +523,7 @@ class FastHrtime : public BaseObject {
     BigIntImpl(FromJSObject<FastHrtime>(args.Holder()));
   }
 
-  v8::Global<ArrayBuffer> array_buffer_;
+  Global<ArrayBuffer> array_buffer_;
   std::shared_ptr<BackingStore> backing_store_;
 };
 
@@ -535,6 +555,7 @@ static void InitializeProcessMethods(Local<Object> target,
   env->SetMethod(target, "umask", Umask);
   env->SetMethod(target, "_rawDebug", RawDebug);
   env->SetMethod(target, "memoryUsage", MemoryUsage);
+  env->SetMethod(target, "rss", Rss);
   env->SetMethod(target, "cpuUsage", CPUUsage);
   env->SetMethod(target, "resourceUsage", ResourceUsage);
 
@@ -561,6 +582,7 @@ void RegisterProcessMethodsExternalReferences(
   registry->Register(Umask);
   registry->Register(RawDebug);
   registry->Register(MemoryUsage);
+  registry->Register(Rss);
   registry->Register(CPUUsage);
   registry->Register(ResourceUsage);
 

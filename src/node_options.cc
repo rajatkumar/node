@@ -7,6 +7,8 @@
 
 #include <errno.h>
 #include <sstream>
+#include <limits>
+#include <algorithm>
 #include <cstdlib>  // strtoul, errno
 
 using v8::Boolean;
@@ -63,6 +65,20 @@ void PerProcessOptions::CheckOptions(std::vector<std::string>* errors) {
   if (use_openssl_ca && use_bundled_ca) {
     errors->push_back("either --use-openssl-ca or --use-bundled-ca can be "
                       "used, not both");
+  }
+
+  // Any value less than 2 disables use of the secure heap.
+  if (secure_heap >= 2) {
+    if ((secure_heap & (secure_heap - 1)) != 0)
+      errors->push_back("--secure-heap must be a power of 2");
+    secure_heap_min =
+        std::min({
+            secure_heap,
+            secure_heap_min,
+            static_cast<int64_t>(std::numeric_limits<int>::max())});
+    secure_heap_min = std::max(static_cast<int64_t>(2), secure_heap_min);
+    if ((secure_heap_min & (secure_heap_min - 1)) != 0)
+      errors->push_back("--secure-heap-min must be a power of 2");
   }
 #endif
   if (use_largepages != "off" &&
@@ -276,13 +292,21 @@ EnvironmentOptionsParser::EnvironmentOptionsParser() {
             "additional user conditions for conditional exports and imports",
             &EnvironmentOptions::conditions,
             kAllowedInEnvironment);
+  AddAlias("-C", "--conditions");
   AddOption("--diagnostic-dir",
             "set dir for all output files"
             " (default: current working directory)",
             &EnvironmentOptions::diagnostic_dir,
             kAllowedInEnvironment);
+  AddOption("--dns-result-order",
+            "set default value of verbatim in dns.lookup. Options are "
+            "'ipv4first' (IPv4 addresses are placed before IPv6 addresses) "
+            "'verbatim' (addresses are in the order the DNS resolver "
+            "returned)",
+            &EnvironmentOptions::dns_result_order,
+            kAllowedInEnvironment);
   AddOption("--enable-source-maps",
-            "experimental Source Map V3 support",
+            "Source Map V3 support for stack traces",
             &EnvironmentOptions::enable_source_maps,
             kAllowedInEnvironment);
   AddOption("--experimental-abortcontroller", "",
@@ -367,18 +391,21 @@ EnvironmentOptionsParser::EnvironmentOptionsParser() {
             kAllowedInEnvironment);
   AddAlias("--es-module-specifier-resolution",
            "--experimental-specifier-resolution");
-  AddOption("--no-deprecation",
+  AddOption("--deprecation",
             "silence deprecation warnings",
-            &EnvironmentOptions::no_deprecation,
-            kAllowedInEnvironment);
-  AddOption("--no-force-async-hooks-checks",
+            &EnvironmentOptions::deprecation,
+            kAllowedInEnvironment,
+            true);
+  AddOption("--force-async-hooks-checks",
             "disable checks for async_hooks",
-            &EnvironmentOptions::no_force_async_hooks_checks,
-            kAllowedInEnvironment);
-  AddOption("--no-warnings",
+            &EnvironmentOptions::force_async_hooks_checks,
+            kAllowedInEnvironment,
+            true);
+  AddOption("--warnings",
             "silence all process warnings",
-            &EnvironmentOptions::no_warnings,
-            kAllowedInEnvironment);
+            &EnvironmentOptions::warnings,
+            kAllowedInEnvironment,
+            true);
   AddOption("--force-context-aware",
             "disable loading non-context-aware addons",
             &EnvironmentOptions::force_context_aware,
@@ -484,8 +511,12 @@ EnvironmentOptionsParser::EnvironmentOptionsParser() {
             &EnvironmentOptions::trace_warnings,
             kAllowedInEnvironment);
   AddOption("--unhandled-rejections",
-            "define unhandled rejections behavior. Options are 'strict' (raise "
-            "an error), 'warn' (enforce warnings) or 'none' (silence warnings)",
+            "define unhandled rejections behavior. Options are 'strict' "
+            "(always raise an error), 'throw' (raise an error unless "
+            "'unhandledRejection' hook is set), 'warn' (log a warning), 'none' "
+            "(silence warnings), 'warn-with-error-code' (log a warning and set "
+            "exit code 1 unless 'unhandledRejection' hook is set). (default: "
+            "throw)",
             &EnvironmentOptions::unhandled_rejections,
             kAllowedInEnvironment);
   AddOption("--verify-base-objects",
@@ -566,9 +597,9 @@ PerIsolateOptionsParser::PerIsolateOptionsParser(
             "track heap object allocations for heap snapshots",
             &PerIsolateOptions::track_heap_objects,
             kAllowedInEnvironment);
-  AddOption("--no-node-snapshot",
+  AddOption("--node-snapshot",
             "",  // It's a debug-only option.
-            &PerIsolateOptions::no_node_snapshot,
+            &PerIsolateOptions::node_snapshot,
             kAllowedInEnvironment);
 
   // Explicitly add some V8 flags to mark them as allowed in NODE_OPTIONS.
@@ -709,7 +740,7 @@ PerProcessOptionsParser::PerProcessOptionsParser(
   AddOption("--icu-data-dir",
             "set ICU data load path to dir (overrides NODE_ICU_DATA)"
 #ifndef NODE_HAVE_SMALL_ICU
-            " (note: linked-in ICU data is present)\n"
+            " (note: linked-in ICU data is present)"
 #endif
             ,
             &PerProcessOptions::icu_data_dir,
@@ -750,7 +781,6 @@ PerProcessOptionsParser::PerProcessOptionsParser(
             &PerProcessOptions::ssl_openssl_cert_store);
   Implies("--use-openssl-ca", "[ssl_openssl_cert_store]");
   ImpliesNot("--use-bundled-ca", "[ssl_openssl_cert_store]");
-#if NODE_FIPS_MODE
   AddOption("--enable-fips",
             "enable FIPS crypto at startup",
             &PerProcessOptions::enable_fips_crypto,
@@ -759,7 +789,14 @@ PerProcessOptionsParser::PerProcessOptionsParser(
             "force FIPS crypto (cannot be disabled)",
             &PerProcessOptions::force_fips_crypto,
             kAllowedInEnvironment);
-#endif
+  AddOption("--secure-heap",
+            "total size of the OpenSSL secure heap",
+            &PerProcessOptions::secure_heap,
+            kAllowedInEnvironment);
+  AddOption("--secure-heap-min",
+            "minimum allocation size from the OpenSSL secure heap",
+            &PerProcessOptions::secure_heap_min,
+            kAllowedInEnvironment);
 #endif
   AddOption("--use-largepages",
             "Map the Node.js static code to large pages. Options are "
@@ -893,6 +930,12 @@ void GetOptions(const FunctionCallbackInfo<Value>& args) {
   });
 
   Local<Map> options = Map::New(isolate);
+  if (options
+          ->SetPrototype(context, env->primordials_safe_map_prototype_object())
+          .IsNothing()) {
+    return;
+  }
+
   for (const auto& item : _ppop_instance.options_) {
     Local<Value> value;
     const auto& option_info = item.second;
@@ -915,12 +958,14 @@ void GetOptions(const FunctionCallbackInfo<Value>& args) {
                              *_ppop_instance.Lookup<bool>(field, opts));
         break;
       case kInteger:
-        value = Number::New(isolate,
-                            *_ppop_instance.Lookup<int64_t>(field, opts));
+        value = Number::New(
+            isolate,
+            static_cast<double>(*_ppop_instance.Lookup<int64_t>(field, opts)));
         break;
       case kUInteger:
-        value = Number::New(isolate,
-                            *_ppop_instance.Lookup<uint64_t>(field, opts));
+        value = Number::New(
+            isolate,
+            static_cast<double>(*_ppop_instance.Lookup<uint64_t>(field, opts)));
         break;
       case kString:
         if (!ToV8Value(context,
@@ -972,6 +1017,10 @@ void GetOptions(const FunctionCallbackInfo<Value>& args) {
                    env->type_string(),
                    Integer::New(isolate, static_cast<int>(option_info.type)))
              .FromMaybe(false) ||
+        !info->Set(context,
+                   env->default_is_true_string(),
+                   Boolean::New(isolate, option_info.default_is_true))
+             .FromMaybe(false) ||
         info->Set(context, env->value_string(), value).IsNothing() ||
         options->Set(context, name, info).IsEmpty()) {
       return;
@@ -980,6 +1029,12 @@ void GetOptions(const FunctionCallbackInfo<Value>& args) {
 
   Local<Value> aliases;
   if (!ToV8Value(context, _ppop_instance.aliases_).ToLocal(&aliases)) return;
+
+  if (aliases.As<Object>()
+          ->SetPrototype(context, env->primordials_safe_map_prototype_object())
+          .IsNothing()) {
+    return;
+  }
 
   Local<Object> ret = Object::New(isolate);
   if (ret->Set(context, env->options_string(), options).IsNothing() ||

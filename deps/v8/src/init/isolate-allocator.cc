@@ -12,20 +12,16 @@
 namespace v8 {
 namespace internal {
 
-IsolateAllocator::IsolateAllocator(IsolateAllocationMode mode) {
-#if V8_TARGET_ARCH_64_BIT
-  if (mode == IsolateAllocationMode::kInV8Heap) {
-    Address heap_reservation_address = InitReservation();
-    CommitPagesForIsolate(heap_reservation_address);
-    return;
-  }
-#endif  // V8_TARGET_ARCH_64_BIT
-
+IsolateAllocator::IsolateAllocator() {
+#ifdef V8_COMPRESS_POINTERS
+  Address heap_reservation_address = InitReservation();
+  CommitPagesForIsolate(heap_reservation_address);
+#else
   // Allocate Isolate in C++ heap.
-  CHECK_EQ(mode, IsolateAllocationMode::kInCppHeap);
   page_allocator_ = GetPlatformPageAllocator();
   isolate_memory_ = ::operator new(sizeof(Isolate));
   DCHECK(!reservation_.IsReserved());
+#endif  // V8_COMPRESS_POINTERS
 }
 
 IsolateAllocator::~IsolateAllocator() {
@@ -38,7 +34,7 @@ IsolateAllocator::~IsolateAllocator() {
   ::operator delete(isolate_memory_);
 }
 
-#if V8_TARGET_ARCH_64_BIT
+#ifdef V8_COMPRESS_POINTERS
 
 namespace {
 
@@ -63,8 +59,8 @@ Address IsolateAllocator::InitReservation() {
   // Reserve a |4Gb + kIsolateRootBiasPageSize| region such as that the
   // resevation address plus |kIsolateRootBiasPageSize| is 4Gb aligned.
   const size_t reservation_size =
-      kPtrComprHeapReservationSize + kIsolateRootBiasPageSize;
-  const size_t base_alignment = kPtrComprIsolateRootAlignment;
+      kPtrComprCageReservationSize + kIsolateRootBiasPageSize;
+  const size_t base_alignment = kPtrComprCageBaseAlignment;
 
   const int kMaxAttempts = 4;
   for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
@@ -141,11 +137,11 @@ void IsolateAllocator::CommitPagesForIsolate(Address heap_reservation_address) {
       GetIsolateRootBiasPageSize(platform_page_allocator);
 
   Address isolate_root = heap_reservation_address + kIsolateRootBiasPageSize;
-  CHECK(IsAligned(isolate_root, kPtrComprIsolateRootAlignment));
+  CHECK(IsAligned(isolate_root, kPtrComprCageBaseAlignment));
 
   CHECK(reservation_.InVM(
       heap_reservation_address,
-      kPtrComprHeapReservationSize + kIsolateRootBiasPageSize));
+      kPtrComprCageReservationSize + kIsolateRootBiasPageSize));
 
   // Simplify BoundedPageAllocator's life by configuring it to use same page
   // size as the Heap will use (MemoryChunk::kPageSize).
@@ -153,7 +149,7 @@ void IsolateAllocator::CommitPagesForIsolate(Address heap_reservation_address) {
                              platform_page_allocator->AllocatePageSize());
 
   page_allocator_instance_ = std::make_unique<base::BoundedPageAllocator>(
-      platform_page_allocator, isolate_root, kPtrComprHeapReservationSize,
+      platform_page_allocator, isolate_root, kPtrComprCageReservationSize,
       page_size);
   page_allocator_ = page_allocator_instance_.get();
 
@@ -192,7 +188,7 @@ void IsolateAllocator::CommitPagesForIsolate(Address heap_reservation_address) {
   }
   isolate_memory_ = reinterpret_cast<void*>(isolate_address);
 }
-#endif  // V8_TARGET_ARCH_64_BIT
+#endif  // V8_COMPRESS_POINTERS
 
 }  // namespace internal
 }  // namespace v8

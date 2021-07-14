@@ -11,6 +11,13 @@
 </tr>
 <tr>
 <td valign="top">
+<a href="#12.22.3">12.22.3</a><br/>
+<a href="#12.22.2">12.22.2</a><br/>
+<a href="#12.22.1">12.22.1</a><br/>
+<a href="#12.22.0">12.22.0</a><br/>
+<a href="#12.21.0">12.21.0</a><br/>
+<a href="#12.20.2">12.20.2</a><br/>
+<a href="#12.20.1">12.20.1</a><br/>
 <a href="#12.20.0">12.20.0</a><br/>
 <a href="#12.19.1">12.19.1</a><br/>
 <a href="#12.19.0">12.19.0</a><br/>
@@ -53,6 +60,7 @@
 </table>
 
 * Other Versions
+  * [16.x](CHANGELOG_V16.md)
   * [15.x](CHANGELOG_V15.md)
   * [14.x](CHANGELOG_V14.md)
   * [13.x](CHANGELOG_V13.md)
@@ -68,6 +76,215 @@
   * [0.10.x](CHANGELOG_V010.md)
   * [io.js](CHANGELOG_IOJS.md)
   * [Archive](CHANGELOG_ARCHIVE.md)
+
+<a id="12.22.3"></a>
+## 2021-07-05, Version 12.22.3 'Erbium' (LTS), @richardlau
+
+### Notable Changes
+
+Node.js 12.22.2 introduced a regression in the Windows installer on
+non-English locales that is being fixed in this release. There is no
+need to download this release if you are not using the Windows
+installer.
+
+### Commits
+
+* [[`182f86a4d4`](https://github.com/nodejs/node/commit/182f86a4d4)] - **win,msi**: use localized "Authenticated Users" name (Richard Lau) [#39241](https://github.com/nodejs/node/pull/39241)
+
+<a id="12.22.2"></a>
+## 2021-07-01, Version 12.22.2 'Erbium' (LTS), @richardlau
+
+This is a security release.
+
+### Notable Changes
+
+Vulnerabilities fixed:
+
+* **CVE-2021-22918**: libuv upgrade - Out of bounds read (Medium)
+  * Node.js is vulnerable to out-of-bounds read in libuv's uv__idna_toascii() function which is used to convert strings to ASCII. This is called by Node's dns module's lookup() function and can lead to information disclosures or crashes. You can read more about it in https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-22918
+* **CVE-2021-22921**: Windows installer - Node Installer Local Privilege Escalation (Medium)
+  * Node.js is vulnerable to local privilege escalation attacks under certain conditions on Windows platforms. More specifically, improper configuration of permissions in the installation directory allows an attacker to perform two different escalation attacks: PATH and DLL hijacking. You can read more about it in https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-22921
+* **CVE-2021-27290**: npm upgrade - ssri Regular Expression Denial of Service (ReDoS) (High)
+  * This is a vulnerability in the ssri npm mudule which may be vulnerable to denial of service attacks. You can read more about it in https://github.com/advisories/GHSA-vx3p-948g-6vhq
+* **CVE-2021-23362**: npm upgrade - hosted-git-info Regular Expression Denial of Service (ReDoS) (Medium)
+  * This is a vulnerability in the hosted-git-info npm mudule which may be vulnerable to denial of service attacks. You can read more about it in https://nvd.nist.gov/vuln/detail/CVE-2021-23362
+
+### Commits
+
+* [[`623fd1fcb5`](https://github.com/nodejs/node/commit/623fd1fcb5)] - **deps**: uv: cherry-pick 99c29c9c2c9b (Ben Noordhuis) [nodejs-private/node-private#267](https://github.com/nodejs-private/node-private/pull/267)
+* [[`923b3760f8`](https://github.com/nodejs/node/commit/923b3760f8)] - **deps**: upgrade npm to 6.14.13 (Ruy Adorno) [#38214](https://github.com/nodejs/node/pull/38214)
+* [[`a52790cba0`](https://github.com/nodejs/node/commit/a52790cba0)] - **win,msi**: set install directory permission (AkshayK) [nodejs-private/node-private#269](https://github.com/nodejs-private/node-private/pull/269)
+
+<a id="12.22.1"></a>
+## 2021-04-06, Version 12.22.1 'Erbium' (LTS), @mylesborins
+
+This is a security release.
+
+### Notable Changes
+
+Vulnerabilities fixed:
+
+* **CVE-2021-3450**: OpenSSL - CA certificate check bypass with X509_V_FLAG_X509_STRICT (High)
+  * This is a vulnerability in OpenSSL which may be exploited through Node.js. You can read more about it in https://www.openssl.org/news/secadv/20210325.txt
+  * Impacts:
+    * All versions of the 15.x, 14.x, 12.x and 10.x releases lines
+* **CVE-2021-3449**: OpenSSL - NULL pointer deref in signature_algorithms processing (High)
+  * This is a vulnerability in OpenSSL which may be exploited through Node.js. You can read more about it in https://www.openssl.org/news/secadv/20210325.txt
+  * Impacts:
+    * All versions of the 15.x, 14.x, 12.x and 10.x releases lines
+* **CVE-2020-7774**: npm upgrade - Update y18n to fix Prototype-Pollution (High)
+  * This is a vulnerability in the y18n npm module which may be exploited by prototype pollution. You can read more about it in https://github.com/advisories/GHSA-c4w7-xm78-47vh
+  * Impacts:
+    * All versions of the 14.x, 12.x and 10.x releases lines
+
+### Commits
+
+* [[`c947f1a0e1`](https://github.com/nodejs/node/commit/c947f1a0e1)] - **deps**: upgrade npm to 6.14.12 (Ruy Adorno) [#37918](https://github.com/nodejs/node/pull/37918)
+* [[`51a753c06f`](https://github.com/nodejs/node/commit/51a753c06f)] - **deps**: update archs files for OpenSSL-1.1.1k (Tobias Nießen) [#37939](https://github.com/nodejs/node/pull/37939)
+* [[`c85a519b48`](https://github.com/nodejs/node/commit/c85a519b48)] - **deps**: upgrade openssl sources to 1.1.1k (Tobias Nießen) [#37939](https://github.com/nodejs/node/pull/37939)
+
+<a id="12.22.0"></a>
+## 2021-03-30, Version 12.22.0 'Erbium' (LTS), @richardlau
+
+### Notable changes
+
+#### The legacy HTTP parser is runtime deprecated
+
+The legacy HTTP parser, selected by the `--http-parser=legacy` command line
+option, is deprecated with the pending End-of-Life of Node.js 10.x (where it
+is the only HTTP parser implementation provided) at the end of April 2021. It
+will now warn on use but otherwise continue to function and may be removed in
+a future Node.js 12.x release.
+
+The default HTTP parser based on llhttp is not affected. By default it is
+stricter than the now deprecated legacy HTTP parser. If interoperability with
+HTTP implementations that send invalid HTTP headers is required, the HTTP
+parser can be started in a less secure mode with the
+[`--insecure-http-parser`](https://nodejs.org/docs/latest-v12.x/api/cli.html#cli_insecure_http_parser)
+command line option.
+
+Contributed by Beth Griggs [#37603](https://github.com/nodejs/node/pull/37603).
+
+#### ES Modules
+
+ES Modules are now considered stable.
+
+Contributed by Guy Bedford [#35781](https://github.com/nodejs/node/pull/35781)
+
+#### node-api
+
+Updated to node-api version 8 and added an experimental API to allow retrieval of the add-on file name.
+
+Contributed by Gabriel Schulhof [#37652](https://github.com/nodejs/node/pull/37652) and [#37195](https://github.com/nodejs/node/pull/37195).
+
+#### New API's to control code coverage data collection
+
+`v8.stopCoverage()` and `v8.takeCoverage()` have been added.
+
+Contributed by Joyee Cheung [#33807](https://github.com/nodejs/node/pull/33807).
+
+#### New API to monitor event loop utilization by Worker threads
+
+`worker.performance.eventLoopUtilization()` has been added.
+
+Contributed by Trevor Norris [#35664](https://github.com/nodejs/node/pull/35664).
+
+### Commits
+
+* [[`1872625990`](https://github.com/nodejs/node/commit/1872625990)] - **(SEMVER-MINOR)** **deps**: update to cjs-module-lexer@1.1.0 (Guy Bedford) [#37712](https://github.com/nodejs/node/pull/37712)
+* [[`dfa04d9035`](https://github.com/nodejs/node/commit/dfa04d9035)] - **deps**: V8: cherry-pick beebee4f80ff (Peter Marshall) [#37293](https://github.com/nodejs/node/pull/37293)
+* [[`bf8733fe22`](https://github.com/nodejs/node/commit/bf8733fe22)] - **doc**: mark modules implementation as stable (Guy Bedford) [#35781](https://github.com/nodejs/node/pull/35781)
+* [[`0a35d49f56`](https://github.com/nodejs/node/commit/0a35d49f56)] - ***Revert*** "**embedding**: make Stop() stop Workers" (Anna Henningsen) [#32623](https://github.com/nodejs/node/pull/32623)
+* [[`a0b610450a`](https://github.com/nodejs/node/commit/a0b610450a)] - **(SEMVER-MINOR)** **http**: runtime deprecate legacy HTTP parser (Beth Griggs) [#37603](https://github.com/nodejs/node/pull/37603)
+* [[`2da24ac302`](https://github.com/nodejs/node/commit/2da24ac302)] - **lib**: add URI handling functions to primordials (Antoine du Hamel) [#37394](https://github.com/nodejs/node/pull/37394)
+* [[`7b0ed4ba92`](https://github.com/nodejs/node/commit/7b0ed4ba92)] - **module**: improve support of data: URLs (Antoine du Hamel) [#37392](https://github.com/nodejs/node/pull/37392)
+* [[`93dd799a86`](https://github.com/nodejs/node/commit/93dd799a86)] - **(SEMVER-MINOR)** **node-api**: define version 8 (Gabriel Schulhof) [#37652](https://github.com/nodejs/node/pull/37652)
+* [[`f5692093d3`](https://github.com/nodejs/node/commit/f5692093d3)] - **(SEMVER-MINOR)** **node-api**: allow retrieval of add-on file name (Gabriel Schulhof) [#37195](https://github.com/nodejs/node/pull/37195)
+* [[`6cef0e3678`](https://github.com/nodejs/node/commit/6cef0e3678)] - **src,test**: add regression test for nested Worker termination (Anna Henningsen) [#32623](https://github.com/nodejs/node/pull/32623)
+* [[`364bf03a68`](https://github.com/nodejs/node/commit/364bf03a68)] - **test**: fix races in test-performance-eventlooputil (Gerhard Stoebich) [#36028](https://github.com/nodejs/node/pull/36028)
+* [[`d7a4ccdf09`](https://github.com/nodejs/node/commit/d7a4ccdf09)] - **test**: correct test-worker-eventlooputil (Gerhard Stoebich) [#35891](https://github.com/nodejs/node/pull/35891)
+* [[`0f6d44500c`](https://github.com/nodejs/node/commit/0f6d44500c)] - **test**: add cpu-profiler-crash test (Santiago Gimeno) [#37293](https://github.com/nodejs/node/pull/37293)
+* [[`86f34ee18c`](https://github.com/nodejs/node/commit/86f34ee18c)] - **(SEMVER-MINOR)** **v8**: implement v8.stopCoverage() (Joyee Cheung) [#33807](https://github.com/nodejs/node/pull/33807)
+* [[`8ddea3f16d`](https://github.com/nodejs/node/commit/8ddea3f16d)] - **(SEMVER-MINOR)** **v8**: implement v8.takeCoverage() (Joyee Cheung) [#33807](https://github.com/nodejs/node/pull/33807)
+* [[`eec7542781`](https://github.com/nodejs/node/commit/eec7542781)] - **(SEMVER-MINOR)** **worker**: add eventLoopUtilization() (Trevor Norris) [#35664](https://github.com/nodejs/node/pull/35664)
+
+<a id="12.21.0"></a>
+## 2021-02-23, Version 12.21.0 'Erbium' (LTS), @richardlau
+
+This is a security release.
+
+### Notable changes
+
+Vulnerabilities fixed:
+
+* **CVE-2021-22883**: HTTP2 'unknownProtocol' cause Denial of Service by resource exhaustion
+  * Affected Node.js versions are vulnerable to denial of service attacks when too many connection attempts with an 'unknownProtocol' are established. This leads to a leak of file descriptors. If a file descriptor limit is configured on the system, then the server is unable to accept new connections and prevent the process also from opening, e.g. a file. If no file descriptor limit is configured, then this lead to an excessive memory usage and cause the system to run out of memory.
+* **CVE-2021-22884**: DNS rebinding in --inspect
+  * Affected Node.js versions are vulnerable to denial of service attacks when the whitelist includes “localhost6”. When “localhost6” is not present in /etc/hosts, it is just an ordinary domain that is resolved via DNS, i.e., over network. If the attacker controls the victim's DNS server or can spoof its responses, the DNS rebinding protection can be bypassed by using the “localhost6” domain. As long as the attacker uses the “localhost6” domain, they can still apply the attack described in CVE-2018-7160.
+* **CVE-2021-23840**: OpenSSL - Integer overflow in CipherUpdate
+  * This is a vulnerability in OpenSSL which may be exploited through Node.js. You can read more about it in https://www.openssl.org/news/secadv/20210216.txt
+
+### Commits
+
+* [[`e69177a088`](https://github.com/nodejs/node/commit/e69177a088)] - **deps**: update archs files for OpenSSL-1.1.1j (Daniel Bevenius) [#37413](https://github.com/nodejs/node/pull/37413)
+* [[`0633ae77e6`](https://github.com/nodejs/node/commit/0633ae77e6)] - **deps**: upgrade openssl sources to 1.1.1j (Daniel Bevenius) [#37413](https://github.com/nodejs/node/pull/37413)
+* [[`922ada7713`](https://github.com/nodejs/node/commit/922ada7713)] - **(SEMVER-MINOR)** **http2**: add unknownProtocol timeout (Daniel Bevenius) [nodejs-private/node-private#246](https://github.com/nodejs-private/node-private/pull/246)
+* [[`1564752d55`](https://github.com/nodejs/node/commit/1564752d55)] - **src**: drop localhost6 as allowed host for inspector (Matteo Collina) [nodejs-private/node-private#244](https://github.com/nodejs-private/node-private/pull/244)
+
+<a id="12.20.2"></a>
+## 2021-02-10, Version 12.20.2 'Erbium' (LTS), @ruyadorno
+
+### Notable changes
+
+* **deps**:
+  * upgrade npm to 6.14.11 (Ruy Adorno) [#37173](https://github.com/nodejs/node/pull/37173)
+
+### Commits
+
+* [[`e8a4e560ea`](https://github.com/nodejs/node/commit/e8a4e560ea)] - **async_hooks**: fix leak in AsyncLocalStorage exit (Stephen Belanger) [#35779](https://github.com/nodejs/node/pull/35779)
+* [[`427968d266`](https://github.com/nodejs/node/commit/427968d266)] - **deps**: upgrade npm to 6.14.11 (Ruy Adorno) [#37173](https://github.com/nodejs/node/pull/37173)
+* [[`cd9a8106be`](https://github.com/nodejs/node/commit/cd9a8106be)] - **http**: do not loop over prototype in Agent (Michaël Zasso) [#36410](https://github.com/nodejs/node/pull/36410)
+* [[`4ac8f37800`](https://github.com/nodejs/node/commit/4ac8f37800)] - **http2**: check write not scheduled in scope destructor (David Halls) [#36241](https://github.com/nodejs/node/pull/36241)
+
+<a id="12.20.1"></a>
+## 2021-01-04, Version 12.20.1 'Erbium' (LTS), @richardlau
+
+### Notable changes
+
+This is a security release.
+
+Vulnerabilities fixed:
+
+* **CVE-2020-8265**: use-after-free in TLSWrap (High)
+Affected Node.js versions are vulnerable to a use-after-free bug in its
+TLS implementation. When writing to a TLS enabled socket,
+node::StreamBase::Write calls node::TLSWrap::DoWrite with a freshly
+allocated WriteWrap object as first argument. If the DoWrite method does
+not return an error, this object is passed back to the caller as part of
+a StreamWriteResult structure. This may be exploited to corrupt memory
+leading to a Denial of Service or potentially other exploits
+* **CVE-2020-8287**: HTTP Request Smuggling in nodejs
+Affected versions of Node.js allow two copies of a header field in a
+http request. For example, two Transfer-Encoding header fields. In this
+case Node.js identifies the first header field and ignores the second.
+This can lead to HTTP Request Smuggling
+(https://cwe.mitre.org/data/definitions/444.html).
+* **CVE-2020-1971**: OpenSSL - EDIPARTYNAME NULL pointer de-reference (High)
+This is a vulnerability in OpenSSL which may be exploited through Node.js.
+You can read more about it in
+https://www.openssl.org/news/secadv/20201208.txt
+
+### Commits
+
+* [[`5de5354918`](https://github.com/nodejs/node/commit/5de5354918)] - **deps**: update http-parser to http-parser@ec8b5ee63f (Richard Lau) [nodejs-private/node-private#236](https://github.com/nodejs-private/node-private/pull/236)
+* [[`2eacfbec68`](https://github.com/nodejs/node/commit/2eacfbec68)] - **deps**: upgrade npm to 6.14.10 (Ruy Adorno) [#36571](https://github.com/nodejs/node/pull/36571)
+* [[`96ec482d90`](https://github.com/nodejs/node/commit/96ec482d90)] - **deps**: update archs files for OpenSSL-1.1.1i (Myles Borins) [#36521](https://github.com/nodejs/node/pull/36521)
+* [[`7ec0eb408b`](https://github.com/nodejs/node/commit/7ec0eb408b)] - **deps**: upgrade openssl sources to 1.1.1i (Myles Borins) [#36521](https://github.com/nodejs/node/pull/36521)
+* [[`76ea9c5a7a`](https://github.com/nodejs/node/commit/76ea9c5a7a)] - **deps**: upgrade npm to 6.14.9 (Myles Borins) [#36450](https://github.com/nodejs/node/pull/36450)
+* [[`420244e4d9`](https://github.com/nodejs/node/commit/420244e4d9)] - **http**: unset `F_CHUNKED` on new `Transfer-Encoding` (Matteo Collina) [nodejs-private/node-private#236](https://github.com/nodejs-private/node-private/pull/236)
+* [[`4a30ac8c75`](https://github.com/nodejs/node/commit/4a30ac8c75)] - **http**: add test for http transfer encoding smuggling (Richard Lau) [nodejs-private/node-private#236](https://github.com/nodejs-private/node-private/pull/236)
+* [[`92d430917a`](https://github.com/nodejs/node/commit/92d430917a)] - **http**: unset `F_CHUNKED` on new `Transfer-Encoding` (Fedor Indutny) [nodejs-private/node-private#236](https://github.com/nodejs-private/node-private/pull/236)
+* [[`5b00de7d67`](https://github.com/nodejs/node/commit/5b00de7d67)] - **src**: retain pointers to WriteWrap/ShutdownWrap (James M Snell) [nodejs-private/node-private#230](https://github.com/nodejs-private/node-private/pull/230)
 
 <a id="12.20.0"></a>
 ## 2020-11-24, Version 12.20.0 'Erbium' (LTS), @mylesborins

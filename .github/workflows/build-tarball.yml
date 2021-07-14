@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - master
+      - main
       - v[0-9]+.x-staging
       - v[0-9]+.x
 
@@ -13,6 +14,7 @@ env:
 
 jobs:
   build-tarball:
+    if: github.event.pull_request.draft == false
     env:
       PYTHON_VERSION: 3.9
     runs-on: ubuntu-latest
@@ -56,8 +58,8 @@ jobs:
           name: tarballs
       - name: Extract tarball
         run: |
-          tar xzf tarballs/*.tar.gz
-          echo "TAR_DIR=`basename tarballs/*.tar.gz .tar.gz`" >> $GITHUB_ENV
+          tar xzf tarballs/*.tar.gz -C $RUNNER_TEMP
+          echo "TAR_DIR=$RUNNER_TEMP/`basename tarballs/*.tar.gz .tar.gz`" >> $GITHUB_ENV
       - name: Copy directories needed for testing
         run: |
           cp -r tools/node_modules $TAR_DIR/tools

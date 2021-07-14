@@ -814,6 +814,7 @@ regular `'error'` listener is installed.
 <!-- YAML
 added:
  - v15.2.0
+ - v14.17.0
 -->
 * `emitterOrTarget` {EventEmitter|EventTarget}
 * `eventName` {string|symbol}
@@ -849,6 +850,10 @@ const { getEventListeners, EventEmitter } = require('events');
 added:
  - v11.13.0
  - v10.16.0
+changes:
+  - version: v15.0.0
+    pr-url: https://github.com/nodejs/node/pull/34912
+    description: The `signal` option is supported now.
 -->
 
 * `emitter` {EventEmitter}
@@ -1111,7 +1116,7 @@ process.nextTick(() => ac.abort());
 
 ## `events.setMaxListeners(n[, ...eventTargets])`
 <!-- YAML
-added: REPLACEME
+added: v15.4.0
 -->
 
 * `n` {number} A non-negative number. The maximum number of listeners per
@@ -1137,7 +1142,10 @@ setMaxListeners(5, target, emitter);
 <!-- YAML
 added: v14.5.0
 changes:
-  - version: REPLACEME
+  - version: v16.0.0
+    pr-url: https://github.com/nodejs/node/pull/37237
+    description: changed EventTarget error handling.
+  - version: v15.4.0
     pr-url: https://github.com/nodejs/node/pull/35949
     description: No longer experimental.
   - version: v15.0.0
@@ -1148,8 +1156,6 @@ changes:
 
 The `EventTarget` and `Event` objects are a Node.js-specific implementation
 of the [`EventTarget` Web API][] that are exposed by some Node.js core APIs.
-Neither the `EventTarget` nor `Event` classes are available for end
-user code to create.
 
 ```js
 const target = new EventTarget();
@@ -1249,12 +1255,21 @@ target.addEventListener('foo', handler4, { once: true });
 ### `EventTarget` error handling
 
 When a registered event listener throws (or returns a Promise that rejects),
-by default the error is forwarded to the `process.on('error')` event
-on `process.nextTick()`. Throwing within an event listener will *not* stop
-the other registered handlers from being invoked.
+by default the error is treated as an uncaught exception on
+`process.nextTick()`. This means uncaught exceptions in `EventTarget`s will
+terminate the Node.js process by default.
 
-The `EventTarget` does not implement any special default handling for
-`'error'` type events.
+Throwing within an event listener will *not* stop the other registered handlers
+from being invoked.
+
+The `EventTarget` does not implement any special default handling for `'error'`
+type events like `EventEmitter`.
+
+Currently errors are first forwarded to the `process.on('error')` event
+before reaching `process.on('uncaughtException')`. This behavior is
+deprecated and will change in a future release to align `EventTarget` with
+other Node.js APIs. Any code relying on the `process.on('error')` event should
+be aligned with the new behavior.
 
 ### Class: `Event`
 <!-- YAML
@@ -1344,10 +1359,10 @@ This is not used in Node.js and is provided purely for completeness.
 added: v14.5.0
 -->
 
-* Type: {boolean} True for Node.js internal events, false otherwise.
+* Type: {boolean}
 
-Currently only `AbortSignal`s' `"abort"` event is fired with `isTrusted`
-set to `true`.
+The {AbortSignal} `"abort"` event is emitted with `isTrusted` set to `true`. The
+value is `false` in all other cases.
 
 #### `event.preventDefault()`
 <!-- YAML
@@ -1470,11 +1485,11 @@ target.removeEventListener('foo', handler, { capture: true });
 added: v14.5.0
 -->
 
-* `event` {Object|Event}
+* `event` {Event}
+* Returns: {boolean} `true` if either event’s `cancelable` attribute value is
+  false or its `preventDefault()` method was not invoked, otherwise `false`.
 
-Dispatches the `event` to the list of handlers for `event.type`. The `event`
-may be an `Event` object or any object with a `type` property whose value is
-a `string`.
+Dispatches the `event` to the list of handlers for `event.type`.
 
 The registered event listeners is synchronously invoked in the order they
 were registered.
@@ -1622,8 +1637,8 @@ to the `EventTarget`.
 [`fs.ReadStream`]: fs.md#fs_class_fs_readstream
 [`net.Server`]: net.md#net_class_net_server
 [`process.on('warning')`]: process.md#process_event_warning
-[stream]: stream.md
 [capturerejections]: #events_capture_rejections_of_promises
+[error]: #events_error_events
 [rejection]: #events_emitter_symbol_for_nodejs_rejection_err_eventname_args
 [rejectionsymbol]: #events_events_capturerejectionsymbol
-[error]: #events_error_events
+[stream]: stream.md

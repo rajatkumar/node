@@ -310,13 +310,15 @@ class NODE_EXTERN MultiIsolatePlatform : public v8::Platform {
 
   static std::unique_ptr<MultiIsolatePlatform> Create(
       int thread_pool_size,
-      v8::TracingController* tracing_controller = nullptr);
+      v8::TracingController* tracing_controller = nullptr,
+      v8::PageAllocator* page_allocator = nullptr);
 };
 
 enum IsolateSettingsFlags {
   MESSAGE_LISTENER_WITH_ERROR_LEVEL = 1 << 0,
   DETAILED_SOURCE_POSITIONS_FOR_PROFILING = 1 << 1,
-  SHOULD_NOT_SET_PROMISE_REJECTION_CALLBACK = 1 << 2
+  SHOULD_NOT_SET_PROMISE_REJECTION_CALLBACK = 1 << 2,
+  SHOULD_NOT_SET_PREPARE_STACK_TRACE_CALLBACK = 1 << 3
 };
 
 struct IsolateSettings {
@@ -463,6 +465,8 @@ NODE_EXTERN void DefaultProcessExitHandler(Environment* env, int exit_code);
 
 // This may return nullptr if context is not associated with a Node instance.
 NODE_EXTERN Environment* GetCurrentEnvironment(v8::Local<v8::Context> context);
+NODE_EXTERN IsolateData* GetEnvironmentIsolateData(Environment* env);
+NODE_EXTERN ArrayBufferAllocator* GetArrayBufferAllocator(IsolateData* data);
 
 NODE_EXTERN void OnFatalError(const char* location, const char* message);
 NODE_EXTERN void PromiseRejectCallback(v8::PromiseRejectMessage message);
@@ -922,12 +926,26 @@ struct ACHHandle;
 struct NODE_EXTERN DeleteACHHandle { void operator()(ACHHandle*) const; };
 typedef std::unique_ptr<ACHHandle, DeleteACHHandle> AsyncCleanupHookHandle;
 
-NODE_EXTERN AsyncCleanupHookHandle AddEnvironmentCleanupHook(
+/* This function is not intended to be used externally, it exists to aid in
+ * keeping ABI compatibility between Node and Electron. */
+NODE_EXTERN ACHHandle* AddEnvironmentCleanupHookInternal(
     v8::Isolate* isolate,
     void (*fun)(void* arg, void (*cb)(void*), void* cbarg),
     void* arg);
+inline AsyncCleanupHookHandle AddEnvironmentCleanupHook(
+    v8::Isolate* isolate,
+    void (*fun)(void* arg, void (*cb)(void*), void* cbarg),
+    void* arg) {
+  return AsyncCleanupHookHandle(AddEnvironmentCleanupHookInternal(isolate, fun,
+      arg));
+}
 
-NODE_EXTERN void RemoveEnvironmentCleanupHook(AsyncCleanupHookHandle holder);
+/* This function is not intended to be used externally, it exists to aid in
+ * keeping ABI compatibility between Node and Electron. */
+NODE_EXTERN void RemoveEnvironmentCleanupHookInternal(ACHHandle* holder);
+inline void RemoveEnvironmentCleanupHook(AsyncCleanupHookHandle holder) {
+  RemoveEnvironmentCleanupHookInternal(holder.get());
+}
 
 /* Returns the id of the current execution context. If the return value is
  * zero then no execution has been set. This will happen if the user handles

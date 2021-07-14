@@ -5,10 +5,10 @@
 #ifndef V8_HEAP_OBJECTS_VISITING_INL_H_
 #define V8_HEAP_OBJECTS_VISITING_INL_H_
 
-#include "src/heap/objects-visiting.h"
-
 #include "src/heap/embedder-tracing.h"
 #include "src/heap/mark-compact.h"
+#include "src/heap/objects-visiting.h"
+#include "src/objects/arguments.h"
 #include "src/objects/free-space-inl.h"
 #include "src/objects/js-weak-refs-inl.h"
 #include "src/objects/module-inl.h"
@@ -16,7 +16,12 @@
 #include "src/objects/objects-inl.h"
 #include "src/objects/oddball.h"
 #include "src/objects/ordered-hash-table.h"
+#include "src/objects/synthetic-module-inl.h"
+#include "src/objects/torque-defined-classes.h"
+
+#if V8_ENABLE_WEBASSEMBLY
 #include "src/wasm/wasm-objects.h"
+#endif  // V8_ENABLE_WEBASSEMBLY
 
 namespace v8 {
 namespace internal {

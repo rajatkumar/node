@@ -1,14 +1,11 @@
-'use strict'
-
-const npm = require('../npm.js')
 const { format } = require('util')
 const { resolve } = require('path')
 const nameValidator = require('validate-npm-package-name')
 const npmlog = require('npmlog')
 const replaceInfo = require('./replace-info.js')
-const { report: explainEresolve } = require('./explain-eresolve.js')
+const { report } = require('./explain-eresolve.js')
 
-module.exports = (er) => {
+module.exports = (er, npm) => {
   const short = []
   const detail = []
 
@@ -21,7 +18,7 @@ module.exports = (er) => {
     case 'ERESOLVE':
       short.push(['ERESOLVE', er.message])
       detail.push(['', ''])
-      detail.push(['', explainEresolve(er)])
+      detail.push(['', report(er, npm.color, resolve(npm.cache, 'eresolve-report.txt'))])
       break
 
     case 'ENOLOCK': {
@@ -195,10 +192,14 @@ module.exports = (er) => {
         else {
           detail.push(['404', 'This package name is not valid, because', ''])
 
-          const errorsArray = (valResult.errors || []).concat(valResult.warnings || [])
-          errorsArray.forEach(function (item, idx) {
-            detail.push(['404', ' ' + (idx + 1) + '. ' + item])
-          })
+          const errorsArray = [
+            ...(valResult.errors || []),
+            ...(valResult.warnings || []),
+          ]
+          errorsArray.forEach((item, idx) => detail.push([
+            '404',
+            ' ' + (idx + 1) + '. ' + item,
+          ]))
         }
 
         detail.push(['404', '\nNote that you can also install from a'])

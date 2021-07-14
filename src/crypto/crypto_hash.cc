@@ -50,9 +50,7 @@ void Hash::Initialize(Environment* env, Local<Object> target) {
   env->SetProtoMethod(t, "update", HashUpdate);
   env->SetProtoMethod(t, "digest", HashDigest);
 
-  target->Set(env->context(),
-              FIXED_ONE_BYTE_STRING(env->isolate(), "Hash"),
-              t->GetFunction(env->context()).ToLocalChecked()).Check();
+  env->SetConstructorFunction(target, "Hash", t);
 
   env->SetMethodNoSideEffect(target, "getHashes", GetHashes);
 
@@ -235,9 +233,7 @@ Maybe<bool> HashTraits::AdditionalConfig(
   Utf8Value digest(env->isolate(), args[offset]);
   params->digest = EVP_get_digestbyname(*digest);
   if (UNLIKELY(params->digest == nullptr)) {
-    char msg[1024];
-    snprintf(msg, sizeof(msg), "Invalid digest: %s", *digest);
-    THROW_ERR_CRYPTO_INVALID_DIGEST(env);
+    THROW_ERR_CRYPTO_INVALID_DIGEST(env, "Invalid digest: %s", *digest);
     return Nothing<bool>();
   }
 

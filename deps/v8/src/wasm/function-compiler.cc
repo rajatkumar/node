@@ -14,6 +14,8 @@
 #include "src/utils/ostreams.h"
 #include "src/wasm/baseline/liftoff-compiler.h"
 #include "src/wasm/wasm-code-manager.h"
+#include "src/wasm/wasm-debug.h"
+#include "src/wasm/wasm-engine.h"
 
 namespace v8 {
 namespace internal {
@@ -188,13 +190,24 @@ WasmCompilationResult WasmCompilationUnit::ExecuteFunctionCompilation(
 
     case ExecutionTier::kLiftoff:
       // The --wasm-tier-mask-for-testing flag can force functions to be
-      // compiled with TurboFan, see documentation.
+      // compiled with TurboFan, and the --wasm-debug-mask-for-testing can force
+      // them to be compiled for debugging, see documentation.
       if (V8_LIKELY(FLAG_wasm_tier_mask_for_testing == 0) ||
           func_index_ >= 32 ||
           ((FLAG_wasm_tier_mask_for_testing & (1 << func_index_)) == 0)) {
-        result = ExecuteLiftoffCompilation(wasm_engine->allocator(), env,
-                                           func_body, func_index_,
-                                           for_debugging_, counters, detected);
+        if (V8_LIKELY(func_index_ >= 32 || (FLAG_wasm_debug_mask_for_testing &
+                                            (1 << func_index_)) == 0)) {
+          result = ExecuteLiftoffCompilation(
+              wasm_engine->allocator(), env, func_body, func_index_,
+              for_debugging_, counters, detected);
+        } else {
+          // We don't use the debug side table, we only pass it to cover
+          // different code paths in Liftoff for testing.
+          std::unique_ptr<DebugSideTable> debug_sidetable;
+          result = ExecuteLiftoffCompilation(
+              wasm_engine->allocator(), env, func_body, func_index_,
+              kForDebugging, counters, detected, {}, &debug_sidetable);
+        }
         if (result.succeeded()) break;
       }
 
@@ -267,21 +280,18 @@ void WasmCompilationUnit::CompileWasmFunction(Isolate* isolate,
 
 namespace {
 bool UseGenericWrapper(const FunctionSig* sig) {
-// Work only for int32 parameters and 1 or 0 return value for now.
 #if V8_TARGET_ARCH_X64
   if (sig->returns().size() > 1) {
     return false;
   }
-  if (sig->returns().size() == 1 &&
-      sig->GetReturn(0).kind() != ValueType::kI32 &&
-      sig->GetReturn(0).kind() != ValueType::kI64 &&
-      sig->GetReturn(0).kind() != ValueType::kF32 &&
-      sig->GetReturn(0).kind() != ValueType::kF64) {
+  if (sig->returns().size() == 1 && sig->GetReturn(0).kind() != kI32 &&
+      sig->GetReturn(0).kind() != kI64 && sig->GetReturn(0).kind() != kF32 &&
+      sig->GetReturn(0).kind() != kF64) {
     return false;
   }
   for (ValueType type : sig->parameters()) {
-    if (type.kind() != ValueType::kI32 && type.kind() != ValueType::kI64 &&
-        type.kind() != ValueType::kF32 && type.kind() != ValueType::kF64) {
+    if (type.kind() != kI32 && type.kind() != kI64 && type.kind() != kF32 &&
+        type.kind() != kF64) {
       return false;
     }
   }
@@ -295,10 +305,11 @@ bool UseGenericWrapper(const FunctionSig* sig) {
 JSToWasmWrapperCompilationUnit::JSToWasmWrapperCompilationUnit(
     Isolate* isolate, WasmEngine* wasm_engine, const FunctionSig* sig,
     const WasmModule* module, bool is_import,
-    const WasmFeatures& enabled_features)
+    const WasmFeatures& enabled_features, AllowGeneric allow_generic)
     : is_import_(is_import),
       sig_(sig),
-      use_generic_wrapper_(UseGenericWrapper(sig) && !is_import),
+      use_generic_wrapper_(allow_generic && UseGenericWrapper(sig) &&
+                           !is_import),
       job_(use_generic_wrapper_ ? nullptr
                                 : compiler::NewJSToWasmCompilationJob(
                                       isolate, wasm_engine, sig, module,
@@ -339,7 +350,21 @@ Handle<Code> JSToWasmWrapperCompilationUnit::CompileJSToWasmWrapper(
   // Run the compilation unit synchronously.
   WasmFeatures enabled_features = WasmFeatures::FromIsolate(isolate);
   JSToWasmWrapperCompilationUnit unit(isolate, isolate->wasm_engine(), sig,
-                                      module, is_import, enabled_features);
+                                      module, is_import, enabled_features,
+                                      kAllowGeneric);
+  unit.Execute();
+  return unit.Finalize(isolate);
+}
+
+// static
+Handle<Code> JSToWasmWrapperCompilationUnit::CompileSpecificJSToWasmWrapper(
+    Isolate* isolate, const FunctionSig* sig, const WasmModule* module) {
+  // Run the compilation unit synchronously.
+  const bool is_import = false;
+  WasmFeatures enabled_features = WasmFeatures::FromIsolate(isolate);
+  JSToWasmWrapperCompilationUnit unit(isolate, isolate->wasm_engine(), sig,
+                                      module, is_import, enabled_features,
+                                      kDontAllowGeneric);
   unit.Execute();
   return unit.Finalize(isolate);
 }
